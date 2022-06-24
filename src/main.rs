@@ -81,7 +81,6 @@ impl Object {
 
 fn main() {
     let args = Args::parse();
-    println!("Hello World {:?}", args);
 
     match args.command {
         Command::Init {} => {
