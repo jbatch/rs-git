@@ -24,4 +24,3 @@ bytes = "0.5" # helps wrap responses from reqwest
 tokio = { version = "0.2", features = ["full"] } # async http requests
 flate2 = "1.0" # gzip compression
 sha-1 = "0.9.0"
-clap = { version = "3.2.5", features = ["derive"] }
