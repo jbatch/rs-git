@@ -177,7 +177,7 @@ fn cat_file(command: Command) {
                         println!("{}", len);
                     }
                     if pretty_print {
-                        println!("{}", content);
+                        print!("{}", content);
                     }
                 }
             },
