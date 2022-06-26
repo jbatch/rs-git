@@ -17,6 +17,13 @@ pub enum Command {
         pretty_print: bool,
         object: String,
     },
+    HashObject {
+        /// write the object into the object database
+        // #[clap( short = 'w', value_parser)]
+        write_object: bool,
+        /// file to hash
+        file: String,
+    },
 }
 
 // #[derive(Parser, Debug)]
@@ -64,6 +71,25 @@ impl Args {
                         pretty_print,
                         object,
                     }),
+                    None => Err(GitError::InvalidArgs()),
+                }
+            }
+            "hash-object" => {
+                let mut write_object = false;
+                let mut file: Option<String> = None;
+                while let Some(arg) = args.peek() {
+                    if arg.starts_with("-") {
+                        if arg == "-w" {
+                            write_object = true;
+                        }
+                        args.next().unwrap();
+                    } else {
+                        // treat as positional arg <object>
+                        file = Some(args.next().unwrap());
+                    }
+                }
+                match file {
+                    Some(file) => Ok(Command::HashObject { write_object, file }),
                     None => Err(GitError::InvalidArgs()),
                 }
             }

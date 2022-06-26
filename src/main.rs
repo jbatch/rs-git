@@ -24,6 +24,9 @@ fn main() -> crate::Result<()> {
             print_type,
             print_size,
         }),
+        Command::HashObject { write_object, file } => {
+            hash_object(Command::HashObject { write_object, file })?
+        }
     }
     Ok(())
 }
@@ -60,5 +63,21 @@ fn cat_file(command: Command) {
             },
             Err(why) => println!("Err: {}", why),
         }
+    } else {
+        panic!("Unreachable");
+    }
+}
+
+fn hash_object(command: Command) -> Result<()> {
+    if let Command::HashObject { write_object, file } = command {
+        let object = Object::read_from_file(&file)?;
+        let sha1_hash = object.get_sha1()?;
+        println!("{sha1_hash}");
+        if write_object {
+            object.write_to_database()?;
+        }
+        Ok(())
+    } else {
+        panic!("Unreachable");
     }
 }
