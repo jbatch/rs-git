@@ -71,7 +71,6 @@ fn cat_file(command: Command) {
 fn hash_object(command: Command) -> Result<()> {
     if let Command::HashObject { write_object, file } = command {
         let object = Object::read_from_file(&file)?;
-        println!("{:?} {}", &object, object.get_sha1()?);
         let sha1_hash = object.get_sha1()?;
         println!("{}", sha1_hash);
         if write_object {

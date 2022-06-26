@@ -78,10 +78,8 @@ impl Object {
         let sha1 = self.get_sha1()?;
         let (prefix, suffix) = (&sha1[..2], &sha1[2..]);
         let path = Path::new(".git").join("objects").join(prefix).join(suffix);
-        println!("Writing to database: {:?}", path);
         std::fs::create_dir_all(path.parent().unwrap())?;
         let mut file = File::create(path)?;
-        println!("HERE");
         let data = match self {
             Object::Blob { len, content } => format!("blob {}\0{}", len, content),
         };
