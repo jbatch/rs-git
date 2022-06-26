@@ -80,6 +80,7 @@ impl Object {
         let path = Path::new(".git").join("objects").join(prefix).join(suffix);
         println!("Writing to database: {:?}", path);
         let mut file = File::create(path)?;
+        println!("HERE");
         let data = match self {
             Object::Blob { len, content } => format!("blob {}\0{}", len, content),
         };
