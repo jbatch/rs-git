@@ -72,7 +72,7 @@ fn hash_object(command: Command) -> Result<()> {
     if let Command::HashObject { write_object, file } = command {
         let object = Object::read_from_file(&file)?;
         let sha1_hash = object.get_sha1()?;
-        println!("{sha1_hash}");
+        println!("{}", sha1_hash);
         if write_object {
             object.write_to_database()?;
         }
