@@ -9,10 +9,8 @@ pub use args::*;
 fn main() -> crate::Result<()> {
     let args = Args::parse()?;
 
-    match args.command {
-        Command::Init {} => {
-            init();
-        }
+    let result = match args.command {
+        Command::Init {} => init(),
         Command::CatFile {
             pretty_print,
             object,
@@ -25,21 +23,26 @@ fn main() -> crate::Result<()> {
             print_size,
         }),
         Command::HashObject { write_object, file } => {
-            hash_object(Command::HashObject { write_object, file })?
+            hash_object(Command::HashObject { write_object, file })
         }
+    };
+    if let Err(why) = result {
+        println!("fatal: {}", &why);
+        std::process::exit(9);
     }
-    Ok(())
+    std::process::exit(0);
 }
 
-fn init() {
+fn init() -> Result<()> {
     fs::create_dir(".git").unwrap();
     fs::create_dir(".git/objects").unwrap();
     fs::create_dir(".git/refs").unwrap();
     fs::write(".git/HEAD", "ref: refs/heads/master\n").unwrap();
-    println!("Initialized git directory")
+    println!("Initialized git directory");
+    Ok(())
 }
 
-fn cat_file(command: Command) {
+fn cat_file(command: Command) -> Result<()> {
     if let Command::CatFile {
         print_type,
         print_size,
@@ -47,22 +50,23 @@ fn cat_file(command: Command) {
         object,
     } = command
     {
-        match Object::read_from_sha1(&object) {
-            Ok(obj) => match obj {
-                Object::Blob { len, content } => {
-                    if print_type {
-                        println!("blob");
-                    }
-                    if print_size {
-                        println!("{}", len);
-                    }
-                    if pretty_print {
-                        print!("{}", content);
-                    }
+        let obj = Object::read_from_sha1(&object)?;
+        match obj {
+            Object::Blob { len, content } => {
+                if print_type {
+                    println!("blob");
                 }
-            },
-            Err(why) => println!("Err: {}", why),
+                if print_size {
+                    println!("{}", len);
+                }
+                if pretty_print {
+                    print!("{}", content);
+                }
+            }
+            Object::Tree { len, entries } => todo!(),
         }
+
+        Ok(())
     } else {
         panic!("Unreachable");
     }

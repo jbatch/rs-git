@@ -14,6 +14,14 @@ use sha1::{Digest, Sha1};
 #[derive(Debug)]
 pub enum Object {
     Blob { len: i32, content: String },
+    Tree { len: i32, entries: Vec<Entry> },
+}
+
+#[derive(Debug)]
+pub struct Entry {
+    mode: i32,
+    name: String,
+    sha1: String,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +60,10 @@ impl Object {
                     content: rest.to_string(),
                 });
             }
+            "tree" => {
+                println!("{}", rest);
+                panic!("here");
+            }
             _ => Err(Box::new(GitError::CorruptFile())),
         }
     }
@@ -71,6 +83,7 @@ impl Object {
                 let bytes = Sha1::digest(s.as_bytes());
                 Ok(format!("{:x}", bytes))
             }
+            Object::Tree { len, entries } => todo!(),
         }
     }
 
@@ -82,6 +95,7 @@ impl Object {
         let mut file = File::create(path)?;
         let data = match self {
             Object::Blob { len, content } => format!("blob {}\0{}", len, content),
+            Object::Tree { len, entries } => todo!(),
         };
         let data_bin = zlib_compress(data)?;
         file.write(&data_bin)?;
