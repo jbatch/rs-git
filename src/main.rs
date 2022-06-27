@@ -63,7 +63,19 @@ fn cat_file(command: Command) -> Result<()> {
                     print!("{}", content);
                 }
             }
-            Object::Tree { len, entries } => todo!(),
+            Object::Tree { len, entries } => {
+                if print_type {
+                    println!("tree");
+                }
+                if print_size {
+                    println!("{}", len);
+                }
+                if pretty_print {
+                    for entry in entries {
+                        println!("{} {} {}\t{}", entry.mode, "blob", entry.sha1, entry.name);
+                    }
+                }
+            }
         }
 
         Ok(())

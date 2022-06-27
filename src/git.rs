@@ -5,6 +5,7 @@ use std::{
     io::Read,
     io::Write,
     path::Path,
+    vec::IntoIter,
 };
 
 use flate2::write::ZlibEncoder;
@@ -19,9 +20,34 @@ pub enum Object {
 
 #[derive(Debug)]
 pub struct Entry {
-    mode: i32,
-    name: String,
-    sha1: String,
+    pub mode: i32,
+    pub type_: String,
+    pub name: String,
+    pub sha1: String,
+}
+
+impl Entry {
+    pub fn new(bytes: &mut IntoIter<u8>) -> Result<Entry> {
+        let mode = String::from_utf8(take_until(bytes, b' '))?.parse::<i32>()?;
+        let type_ = if mode.to_string().chars().nth(0).unwrap() == '1' {
+            "blob".to_string()
+        } else {
+            "tree".to_string()
+        };
+        let name = String::from_utf8(take_until(bytes, b'\0'))?;
+        let sha1 = bytes
+            .by_ref()
+            .take(20)
+            .map(|b| format!("{:02x}", b))
+            .collect();
+
+        Ok(Entry {
+            mode,
+            type_,
+            name,
+            sha1,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -47,22 +73,31 @@ impl Object {
     pub fn read_from_sha1(object_sha: &str) -> Result<Object> {
         let (prefix, suffix) = (&object_sha[..2], &object_sha[2..]);
         let bytes = get_object_file_as_byte_vec(prefix, suffix)?;
-        let contents = zlib_decompress(bytes)?;
-        let (obj_type, rest) = contents.split_once(' ').ok_or(GitError::CorruptFile())?;
-        match obj_type {
+        let mut rest = zlib_decompress(bytes)?.into_iter();
+        let obj_type = take_until(&mut rest, b' ');
+        let obj_type = String::from_utf8(obj_type)?;
+        let len = String::from_utf8(take_until(&mut rest, b'\0'))?
+            .parse::<i32>()
+            .unwrap();
+
+        // let (obj_type, rest) = contents.split_once(' ').ok_or(GitError::CorruptFile())?;
+        match obj_type.as_str() {
             "blob" => {
-                let (object_len, rest) = rest
-                    .split_once('\0')
-                    .map(|(s1, s2)| (s1.parse::<i32>().unwrap(), s2)) // TODO get rid of unwrap
-                    .ok_or(GitError::CorruptFile())?;
-                return Ok(Self::Blob {
-                    len: object_len,
-                    content: rest.to_string(),
-                });
+                // Blob format: {type} {len}\0{content}
+                // Split bytes at next NUL byte and extract as the length.
+
+                let content = String::from_utf8(rest.collect())?;
+                Ok(Self::Blob { len, content })
             }
             "tree" => {
-                println!("{}", rest);
-                panic!("here");
+                // Tree format: {type} {len}\0[{mode} {file/dir name}\0{SHA1 hash}]*
+                // where the {SHA1 hash} is binary.
+                let mut entries = Vec::new();
+                while rest.len() > 0 {
+                    let entry = Entry::new(&mut rest)?;
+                    entries.push(entry);
+                }
+                Ok(Self::Tree { len, entries })
             }
             _ => Err(Box::new(GitError::CorruptFile())),
         }
@@ -83,7 +118,7 @@ impl Object {
                 let bytes = Sha1::digest(s.as_bytes());
                 Ok(format!("{:x}", bytes))
             }
-            Object::Tree { len, entries } => todo!(),
+            Object::Tree { len: _, entries: _ } => todo!(),
         }
     }
 
@@ -95,12 +130,18 @@ impl Object {
         let mut file = File::create(path)?;
         let data = match self {
             Object::Blob { len, content } => format!("blob {}\0{}", len, content),
-            Object::Tree { len, entries } => todo!(),
+            Object::Tree { len: _, entries: _ } => todo!(),
         };
         let data_bin = zlib_compress(data)?;
         file.write(&data_bin)?;
         Ok(())
     }
+}
+
+/// Takes in an itterable of bytes and returns a Vec of bytes the the left of the target or the whole Iterable if target not found.
+fn take_until<'a>(bytes: &mut IntoIter<u8>, target: u8) -> Vec<u8> {
+    let type_buf: Vec<u8> = bytes.by_ref().take_while(|b| *b != target).collect();
+    type_buf
 }
 
 fn get_object_file_as_byte_vec(prefix: &str, suffix: &str) -> Result<Vec<u8>> {
@@ -112,11 +153,11 @@ fn get_object_file_as_byte_vec(prefix: &str, suffix: &str) -> Result<Vec<u8>> {
     Ok(buffer)
 }
 
-fn zlib_decompress(bytes: Vec<u8>) -> Result<String> {
+fn zlib_decompress(bytes: Vec<u8>) -> Result<Vec<u8>> {
     let mut z = ZlibDecoder::new(&bytes[..]);
-    let mut s = String::new();
-    z.read_to_string(&mut s)?;
-    Ok(s)
+    let mut buf: Vec<u8> = Vec::new();
+    z.read_to_end(&mut buf)?;
+    Ok(buf)
 }
 
 fn zlib_compress(s: String) -> Result<Vec<u8>> {
