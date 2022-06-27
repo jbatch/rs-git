@@ -24,6 +24,12 @@ pub enum Command {
         /// file to hash
         file: String,
     },
+    LsTree {
+        /// Whether to only print the file/dir names.
+        name_only: bool,
+        /// Hash of the tree to print
+        object: String,
+    },
 }
 
 // #[derive(Parser, Debug)]
@@ -43,7 +49,7 @@ impl Args {
 
         let command = match args.next() {
             Some(command) => Ok(command),
-            None => Err(GitError::InvalidArgs()),
+            None => Err(GitError::InvalidArgs("missing command".to_string())),
         }?;
 
         let command = match command.as_str() {
@@ -71,7 +77,9 @@ impl Args {
                         pretty_print,
                         object,
                     }),
-                    None => Err(GitError::InvalidArgs()),
+                    None => Err(GitError::InvalidArgs(
+                        "missing positional argument <object>".to_string(),
+                    )),
                 }
             }
             "hash-object" => {
@@ -84,16 +92,42 @@ impl Args {
                         }
                         args.next().unwrap();
                     } else {
-                        // treat as positional arg <object>
+                        // treat as positional arg <file>
                         file = Some(args.next().unwrap());
                     }
                 }
                 match file {
                     Some(file) => Ok(Command::HashObject { write_object, file }),
-                    None => Err(GitError::InvalidArgs()),
+                    None => Err(GitError::InvalidArgs(
+                        "missing positional argument <file>".to_string(),
+                    )),
                 }
             }
-            _ => Err(GitError::InvalidArgs()),
+            "ls-tree" => {
+                let mut name_only = false;
+                let mut object = None;
+                while let Some(arg) = args.peek() {
+                    if arg.starts_with("-") {
+                        if arg == "--name-only" {
+                            name_only = true;
+                        }
+                        args.next().unwrap();
+                    } else {
+                        // treat as positional arg <object>
+                        object = Some(args.next().unwrap());
+                    }
+                }
+                match object {
+                    Some(object) => Ok(Command::LsTree { name_only, object }),
+                    None => Err(GitError::InvalidArgs(
+                        "missing potisional argument <tree>".to_string(),
+                    )),
+                }
+            }
+            _ => Err(GitError::InvalidArgs(format!(
+                "invalid command: {}",
+                command
+            ))),
         }?;
 
         Ok(Args { command })

@@ -52,7 +52,7 @@ impl Entry {
 
 #[derive(Debug, Clone)]
 pub enum GitError {
-    InvalidArgs(),
+    InvalidArgs(String),
     CorruptFile(),
 }
 
@@ -60,7 +60,7 @@ impl fmt::Display for GitError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             GitError::CorruptFile() => write!(f, "Could not read corrupted file"),
-            GitError::InvalidArgs() => write!(f, "Invalid command line args"),
+            GitError::InvalidArgs(why) => write!(f, "{}", &why),
         }
     }
 }

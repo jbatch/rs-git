@@ -7,7 +7,12 @@ mod args;
 pub use args::*;
 
 fn main() -> crate::Result<()> {
-    let args = Args::parse()?;
+    let args = Args::parse();
+    if let Err(why) = args {
+        println!("fatal: {}", &why);
+        std::process::exit(9);
+    }
+    let args = args.unwrap();
 
     let result = match args.command {
         Command::Init {} => init(),
@@ -25,6 +30,7 @@ fn main() -> crate::Result<()> {
         Command::HashObject { write_object, file } => {
             hash_object(Command::HashObject { write_object, file })
         }
+        Command::LsTree { name_only, object } => ls_tree(Command::LsTree { name_only, object }),
     };
     if let Err(why) = result {
         println!("fatal: {}", &why);
@@ -91,6 +97,28 @@ fn hash_object(command: Command) -> Result<()> {
         println!("{}", sha1_hash);
         if write_object {
             object.write_to_database()?;
+        }
+        Ok(())
+    } else {
+        panic!("Unreachable");
+    }
+}
+
+fn ls_tree(command: Command) -> Result<()> {
+    if let Command::LsTree { name_only, object } = command {
+        let obj = Object::read_from_sha1(&object)?;
+        if let Object::Tree { len: _, entries } = obj {
+            for entry in entries {
+                if name_only {
+                    println!("{}", entry.name);
+                } else {
+                    println!("{} {} {}\t{}", entry.mode, "blob", entry.sha1, entry.name);
+                }
+            }
+        } else {
+            return Err(Box::new(GitError::InvalidArgs(
+                "not a tree object".to_string(),
+            )));
         }
         Ok(())
     } else {
