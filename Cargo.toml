@@ -6,9 +6,9 @@
 #
 # DON'T EDIT THIS!
 [package]
-name = "rs-git"
+name = "git-starter-rust"
 version = "0.1.0"
-authors = ["Codecrafters <hello@codecrafters.io>", "Josh Batchelor <no-reply@jbat.ch>"]
+authors = ["Codecrafters <hello@codecrafters.io>"]
 edition = "2018"
 
 # DON'T EDIT THIS!
