@@ -139,9 +139,8 @@ fn ls_tree(command: Command) -> Result<()> {
 
 fn write_tree(command: Command) -> Result<()> {
     if let Command::WriteTree {} = command {
-        println!("Write Tree");
         let dir = Object::read_from_dir(&env::current_dir()?)?;
-        println!("{:?}", dir);
+        dir.write_to_database()?;
         println!("{}", dir.get_sha1()?);
         Ok(())
     } else {

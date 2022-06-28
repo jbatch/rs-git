@@ -169,7 +169,6 @@ impl Object {
         let mut dir: Vec<DirEntry> = fs::read_dir(dir)?.map(|r| r.unwrap()).collect();
         dir.sort_by_key(|e| e.path());
 
-        println!("read_from_dir {:?}", &dir);
         let mut len = 0;
         let mut entries: Vec<Entry> = Vec::new();
 
@@ -182,22 +181,20 @@ impl Object {
             {
                 continue;
             }
-            println!("Creating entry from {:?}", entry);
+
             let e = Entry::from_dir_entry(entry)?;
-            println!("Created entry {:?} with len {}", e, e.len());
+
             len += e.len();
             entries.push(e);
         }
         Ok(Self::Tree { len, entries })
     }
 
-    pub fn get_sha1(&self) -> Result<String> {
+    pub fn as_bytes(&self) -> Vec<u8> {
         match self {
-            Object::Blob { len, content } => {
-                let s = format!("{} {}\0{}", "blob", len, content);
-                let bytes = Sha1::digest(s.as_bytes());
-                Ok(format!("{:x}", bytes))
-            }
+            Object::Blob { len, content } => format!("{} {}\0{}", "blob", len, content)
+                .as_bytes()
+                .to_vec(),
             Object::Tree { len, entries } => {
                 // Format: {type} {len}\0[{mode} {file/dir name}\0{SHA1 hash}]*
                 // where the {SHA1 hash} is binary.
@@ -210,8 +207,19 @@ impl Object {
                 for e in entries {
                     bytes.push(e.to_bytes())
                 }
-                let hash = Sha1::digest(&bytes.concat());
-                println!("creating hash {:?} ", encode_hex(&bytes.concat()));
+                bytes.concat()
+            }
+        }
+    }
+
+    pub fn get_sha1(&self) -> Result<String> {
+        match self {
+            Object::Blob { len, content } => {
+                let bytes = Sha1::digest(&self.as_bytes());
+                Ok(format!("{:x}", bytes))
+            }
+            Object::Tree { len, entries } => {
+                let hash = Sha1::digest(&self.as_bytes());
                 Ok(format!("{:x}", hash))
             }
         }
@@ -223,11 +231,8 @@ impl Object {
         let path = Path::new(".git").join("objects").join(prefix).join(suffix);
         std::fs::create_dir_all(path.parent().unwrap())?;
         let mut file = File::create(path)?;
-        let data = match self {
-            Object::Blob { len, content } => format!("blob {}\0{}", len, content),
-            Object::Tree { len: _, entries: _ } => todo!(),
-        };
-        let data_bin = zlib_compress(data)?;
+        let data = self.as_bytes();
+        let data_bin = zlib_compress(&data)?;
         file.write(&data_bin)?;
         Ok(())
     }
@@ -255,9 +260,9 @@ fn zlib_decompress(bytes: Vec<u8>) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-fn zlib_compress(s: String) -> Result<Vec<u8>> {
+fn zlib_compress(data: &Vec<u8>) -> Result<Vec<u8>> {
     let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
-    e.write(s.as_bytes())?;
+    e.write(&data)?;
     let compressed = e.finish()?;
     Ok(compressed)
 }
