@@ -97,6 +97,10 @@ impl Entry {
 
     fn get_mode(dir_entry: &DirEntry) -> Result<u32> {
         // From https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
+
+        if dir_entry.metadata()?.is_dir() {
+            return Ok(16384);
+        }
         Ok(dir_entry.metadata()?.permissions().mode())
     }
 }
