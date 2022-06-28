@@ -142,6 +142,7 @@ fn write_tree(command: Command) -> Result<()> {
         println!("Write Tree");
         let dir = Object::read_from_dir(&env::current_dir()?)?;
         println!("{:?}", dir);
+        println!("{}", dir.get_sha1()?);
         Ok(())
     } else {
         panic!("unreachable");
