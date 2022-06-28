@@ -162,13 +162,14 @@ impl Object {
     }
 
     pub fn read_from_dir(dir: &Path) -> Result<Object> {
-        let dir = fs::read_dir(dir)?;
+        let mut dir: Vec<DirEntry> = fs::read_dir(dir)?.map(|r| r.unwrap()).collect();
+        dir.sort_by_key(|e| e.path());
+
         println!("read_from_dir {:?}", &dir);
         let mut len = 0;
         let mut entries: Vec<Entry> = Vec::new();
 
         for entry in dir {
-            let entry = entry?;
             // Filter out ignored files
             let ignored_names = ["target".to_string(), ".git".to_string()];
             if ignored_names
@@ -179,7 +180,7 @@ impl Object {
             }
             println!("Creating entry from {:?}", entry);
             let e = Entry::from_dir_entry(entry)?;
-            println!("Created entry {:?}", e);
+            println!("Created entry {:?} with len {}", e, e.len());
             len += e.len();
             entries.push(e);
         }
@@ -206,7 +207,7 @@ impl Object {
                     bytes.push(e.to_bytes())
                 }
                 let hash = Sha1::digest(&bytes.concat());
-                println!("creating hash {:?} => {:?}", bytes.concat(), hash);
+                println!("creating hash {:?} ", encode_hex(&bytes.concat()));
                 Ok(format!("{:x}", hash))
             }
         }
