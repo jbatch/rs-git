@@ -69,7 +69,7 @@ impl Entry {
         let name = dir_entry
             .file_name()
             .into_string()
-            .map_err(|os| GitError::CorruptFile())?;
+            .map_err(|_os| GitError::CorruptFile())?;
         let mode = Self::get_mode(&dir_entry)?;
         Ok(Entry {
             mode,
@@ -214,11 +214,11 @@ impl Object {
 
     pub fn get_sha1(&self) -> Result<String> {
         match self {
-            Object::Blob { len, content } => {
+            Object::Blob { len: _, content: _ } => {
                 let bytes = Sha1::digest(&self.as_bytes());
                 Ok(format!("{:x}", bytes))
             }
-            Object::Tree { len, entries } => {
+            Object::Tree { len: _, entries: _ } => {
                 let hash = Sha1::digest(&self.as_bytes());
                 Ok(format!("{:x}", hash))
             }
@@ -276,6 +276,7 @@ pub fn decode_hex(s: &str) -> std::result::Result<Vec<u8>, ParseIntError> {
         .collect()
 }
 
+#[allow(dead_code)]
 fn encode_hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for &b in bytes {
