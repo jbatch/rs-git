@@ -30,6 +30,7 @@ pub enum Command {
         /// Hash of the tree to print
         object: String,
     },
+    WriteTree {},
 }
 
 // #[derive(Parser, Debug)]
@@ -124,6 +125,7 @@ impl Args {
                     )),
                 }
             }
+            "write-tree" => Ok(Command::WriteTree {}),
             _ => Err(GitError::InvalidArgs(format!(
                 "invalid command: {}",
                 command

@@ -1,9 +1,12 @@
+use std::str;
 use std::{
     error::Error,
     fmt,
-    fs::{self, File},
+    fs::{self, DirEntry, File},
     io::Read,
     io::Write,
+    num::ParseIntError,
+    os::unix::prelude::PermissionsExt,
     path::Path,
     vec::IntoIter,
 };
@@ -20,7 +23,7 @@ pub enum Object {
 
 #[derive(Debug)]
 pub struct Entry {
-    pub mode: i32,
+    pub mode: u32,
     pub type_: String,
     pub name: String,
     pub sha1: String,
@@ -28,13 +31,13 @@ pub struct Entry {
 
 impl Entry {
     pub fn new(bytes: &mut IntoIter<u8>) -> Result<Entry> {
-        let mode = String::from_utf8(take_until(bytes, b' '))?.parse::<i32>()?;
+        let mode = String::from_utf8(take_until(bytes, b' '))?.parse::<u32>()?;
+        let name = String::from_utf8(take_until(bytes, b'\0'))?;
         let type_ = if mode.to_string().chars().nth(0).unwrap() == '1' {
             "blob".to_string()
         } else {
             "tree".to_string()
         };
-        let name = String::from_utf8(take_until(bytes, b'\0'))?;
         let sha1 = bytes
             .by_ref()
             .take(20)
@@ -47,6 +50,54 @@ impl Entry {
             name,
             sha1,
         })
+    }
+
+    pub fn from_dir_entry(dir_entry: DirEntry) -> Result<Entry> {
+        let metadata = dir_entry.metadata()?;
+        let is_dir = metadata.is_dir();
+        let path = dir_entry.path();
+        let object = if is_dir {
+            Object::read_from_dir(&path)?
+        } else {
+            Object::from_path(&path)?
+        };
+        let sha1 = object.get_sha1()?;
+        let type_ = match object {
+            Object::Blob { len: _, content: _ } => "blob".to_string(),
+            Object::Tree { len: _, entries: _ } => "tree".to_string(),
+        };
+        let name = dir_entry
+            .file_name()
+            .into_string()
+            .map_err(|os| GitError::CorruptFile())?;
+        let mode = Self::get_mode(&dir_entry)?;
+        Ok(Entry {
+            mode,
+            type_,
+            name,
+            sha1,
+        })
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        //// [mode] [file name]\0[object ID]
+        vec![
+            format!("{:o}", self.mode).as_bytes().to_vec(),
+            " ".as_bytes().to_vec(),
+            self.name.as_bytes().to_vec(),
+            "\0".as_bytes().to_vec(),
+            decode_hex(&self.sha1).unwrap(),
+        ]
+        .concat()
+    }
+
+    pub fn len(&self) -> i32 {
+        self.to_bytes().len() as i32
+    }
+
+    fn get_mode(dir_entry: &DirEntry) -> Result<u32> {
+        // From https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
+        Ok(dir_entry.metadata()?.permissions().mode())
     }
 }
 
@@ -103,12 +154,36 @@ impl Object {
         }
     }
 
-    pub fn read_from_file(file: &String) -> Result<Object> {
-        let path = Path::new(&file);
+    pub fn from_path(path: &Path) -> Result<Object> {
         let content = fs::read_to_string(path)?;
         let len = content.len() as i32;
 
         Ok(Self::Blob { len, content })
+    }
+
+    pub fn read_from_dir(dir: &Path) -> Result<Object> {
+        let dir = fs::read_dir(dir)?;
+        println!("read_from_dir {:?}", &dir);
+        let mut len = 0;
+        let mut entries: Vec<Entry> = Vec::new();
+
+        for entry in dir {
+            let entry = entry?;
+            // Filter out ignored files
+            let ignored_names = ["target".to_string(), ".git".to_string()];
+            if ignored_names
+                .iter()
+                .any(|v| v.eq(&entry.file_name().into_string().unwrap()))
+            {
+                continue;
+            }
+            println!("Creating entry from {:?}", entry);
+            let e = Entry::from_dir_entry(entry)?;
+            println!("Created entry {:?}", e);
+            len += e.len();
+            entries.push(e);
+        }
+        Ok(Self::Tree { len, entries })
     }
 
     pub fn get_sha1(&self) -> Result<String> {
@@ -118,7 +193,22 @@ impl Object {
                 let bytes = Sha1::digest(s.as_bytes());
                 Ok(format!("{:x}", bytes))
             }
-            Object::Tree { len: _, entries: _ } => todo!(),
+            Object::Tree { len, entries } => {
+                // Format: {type} {len}\0[{mode} {file/dir name}\0{SHA1 hash}]*
+                // where the {SHA1 hash} is binary.
+                let mut bytes = vec![
+                    "tree".as_bytes().to_vec(),
+                    " ".as_bytes().to_vec(),
+                    len.to_string().as_bytes().to_vec(),
+                    "\0".as_bytes().to_vec(),
+                ];
+                for e in entries {
+                    bytes.push(e.to_bytes())
+                }
+                let hash = Sha1::digest(&bytes.concat());
+                println!("creating hash {:?} => {:?}", bytes.concat(), hash);
+                Ok(format!("{:x}", hash))
+            }
         }
     }
 
@@ -165,4 +255,21 @@ fn zlib_compress(s: String) -> Result<Vec<u8>> {
     e.write(s.as_bytes())?;
     let compressed = e.finish()?;
     Ok(compressed)
+}
+
+//Helpers from https://stackoverflow.com/questions/52987181/how-can-i-convert-a-hex-string-to-a-u8-slice
+
+pub fn decode_hex(s: &str) -> std::result::Result<Vec<u8>, ParseIntError> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
+        .collect()
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        fmt::write(&mut s, format_args!("{:02x}", b)).unwrap();
+    }
+    s
 }

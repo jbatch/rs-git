@@ -1,5 +1,9 @@
 // use clap::{Parser, Subcommand};
-use std::fs::{self};
+use std::{
+    env,
+    fs::{self},
+    path::Path,
+};
 
 mod git;
 pub use git::*;
@@ -31,6 +35,7 @@ fn main() -> crate::Result<()> {
             hash_object(Command::HashObject { write_object, file })
         }
         Command::LsTree { name_only, object } => ls_tree(Command::LsTree { name_only, object }),
+        Command::WriteTree {} => write_tree(Command::WriteTree {}),
     };
     if let Err(why) = result {
         println!("fatal: {}", &why);
@@ -78,7 +83,10 @@ fn cat_file(command: Command) -> Result<()> {
                 }
                 if pretty_print {
                     for entry in entries {
-                        println!("{} {} {}\t{}", entry.mode, "blob", entry.sha1, entry.name);
+                        println!(
+                            "{:06} {} {}\t{}",
+                            entry.mode, entry.type_, entry.sha1, entry.name
+                        );
                     }
                 }
             }
@@ -92,7 +100,7 @@ fn cat_file(command: Command) -> Result<()> {
 
 fn hash_object(command: Command) -> Result<()> {
     if let Command::HashObject { write_object, file } = command {
-        let object = Object::read_from_file(&file)?;
+        let object = Object::from_path(&Path::new(&file))?;
         let sha1_hash = object.get_sha1()?;
         println!("{}", sha1_hash);
         if write_object {
@@ -112,7 +120,10 @@ fn ls_tree(command: Command) -> Result<()> {
                 if name_only {
                     println!("{}", entry.name);
                 } else {
-                    println!("{} {} {}\t{}", entry.mode, "blob", entry.sha1, entry.name);
+                    println!(
+                        "{:06} {} {}\t{}",
+                        entry.mode, "blob", entry.sha1, entry.name
+                    );
                 }
             }
         } else {
@@ -123,5 +134,16 @@ fn ls_tree(command: Command) -> Result<()> {
         Ok(())
     } else {
         panic!("Unreachable");
+    }
+}
+
+fn write_tree(command: Command) -> Result<()> {
+    if let Command::WriteTree {} = command {
+        println!("Write Tree");
+        let dir = Object::read_from_dir(&env::current_dir()?)?;
+        println!("{:?}", dir);
+        Ok(())
+    } else {
+        panic!("unreachable");
     }
 }
